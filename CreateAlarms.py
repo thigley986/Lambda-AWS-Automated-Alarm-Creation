@@ -4,13 +4,13 @@ import boto3
 import collections
 
 #SNS Topic Definition for EC2, EBS, and RDS
-ec2_sns = 'arn:aws:sns:us-east-1:659177528321:NotifyMe'
-ebs_sns = 'arn:aws:sns:us-east-1:659177528321:NotifyMe'
-rds_sns = 'arn:aws:sns:us-east-1:659177528321:NotifyMe'
+ec2_sns = '<SNS_TOPIC_ARN>'
+ebs_sns = '<SNS_TOPIC_ARN>'
+rds_sns = '<SNS_TOPIC_ARN>'
 
 #AWS Account and Region Definition for Reboot Actions
-akid = '659177528321'
-region = 'us-east-1'
+akid = '<ACCOUNT_ID>'
+region = '<REGION_NAME>'
 
 #Create AWS clients
 ec = boto3.client('ec2')
