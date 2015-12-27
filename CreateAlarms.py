@@ -3,6 +3,11 @@
 import boto3
 import collections
 
+#SNS Topic Definition for EC2, EBS, and RDS
+ec2_sns = 'SNS-ARN'
+ebs_sns = 'SNS-ARN'
+rds_sns = 'SNS-ARN'
+
 ec = boto3.client('ec2')
 rd = boto3.client('rds')
 cw = boto3.client('cloudwatch')
@@ -27,7 +32,7 @@ def lambda_handler(event, context):
             AlarmDescription='CPU Utilization Greater than 95% for 15+ Minutes',
             ActionsEnabled=True,
             AlarmActions=[
-                'arn:aws:sns:us-east-1:659177528321:NotifyMe',
+                ec2_sns,
             ],
             MetricName='CPUUtilization',
             Namespace='AWS/EC2',
@@ -39,9 +44,78 @@ def lambda_handler(event, context):
                 },
             ],
             Period=300,
-            EvaluationPeriods=1,
+            EvaluationPeriods=3,
             Threshold=95.0,
             ComparisonOperator='GreaterThanOrEqualToThreshold'
+        )
+        
+        #Create Metric "CPU Utilization Greater than 95% for 60+ Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s %s High CPU Utilization Critical" % (name_tag, instance['InstanceId']),
+            AlarmDescription='CPU Utilization Greater than 95% for 60+ Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                ec2_sns,
+            ],
+            MetricName='CPUUtilization',
+            Namespace='AWS/EC2',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'InstanceId',
+                    'Value': instance['InstanceId']
+                },
+            ],
+            Period=300,
+            EvaluationPeriods=12,
+            Threshold=95.0,
+            ComparisonOperator='GreaterThanOrEqualToThreshold'
+        )
+        
+        #Create Metric "CPU Credit Balance <= 25 for 30 Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s %s Credit Balance Warning" % (name_tag, instance['InstanceId']),
+            AlarmDescription='CPU Credit Balance <= 25 for 30 Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                ec2_sns,
+            ],
+            MetricName='CPUCreditBalance',
+            Namespace='AWS/EC2',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'InstanceId',
+                    'Value': instance['InstanceId']
+                },
+            ],
+            Period=300,
+            EvaluationPeriods=6,
+            Threshold=25.0,
+            ComparisonOperator='LessThanOrEqualToThreshold'
+        )
+        
+        #Create Metric "CPU Credit Balance <= 5 for 10 Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s %s Credit Balance Critical" % (name_tag, instance['InstanceId']),
+            AlarmDescription='CPU Credit Balance <= 5 for 10 Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                ec2_sns,
+            ],
+            MetricName='CPUCreditBalance',
+            Namespace='AWS/EC2',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'InstanceId',
+                    'Value': instance['InstanceId']
+                },
+            ],
+            Period=300,
+            EvaluationPeriods=2,
+            Threshold=5.0,
+            ComparisonOperator='LessThanOrEqualToThreshold'
         )
         
     for instance in instances:
