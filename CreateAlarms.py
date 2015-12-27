@@ -80,7 +80,7 @@ def lambda_handler(event, context):
         )
         
         #Create CPU Credit Alarms only on T2 instances
-        if "T2" in instance['InstanceType']:
+        if "t2" in instance['InstanceType']:
             #Create Metric "CPU Credit Balance <= 25 for 30 Minutes"
             response = cw.put_metric_alarm(
                 AlarmName="%s %s Credit Balance Warning" % (name_tag, instance['InstanceId']),
@@ -237,7 +237,7 @@ def lambda_handler(event, context):
             database['DBInstanceIdentifier'])
         
         #Create CPU Credit Alarms only on T2 DB Instance Classes
-        if "T2" in database['DBInstanceClass']:
+        if "t2" in database['DBInstanceClass']:
             
             #Create Metric "CPU Credit Balance <= 25 for 30 Minutes"
             response = cw.put_metric_alarm(
