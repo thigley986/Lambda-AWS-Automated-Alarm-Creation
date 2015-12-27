@@ -1,4 +1,4 @@
-#Describe EC2 instances, EBS volumes, and RDS instances
+#Create EC2 instance, EBS, and RDS alarms for all resources in a region
 
 import boto3
 import collections
