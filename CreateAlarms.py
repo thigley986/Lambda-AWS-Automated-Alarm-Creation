@@ -4,13 +4,13 @@ import boto3
 import collections
 
 #SNS Topic Definition for EC2, EBS, and RDS
-ec2_sns = '<SNS_ARN_TO_NOTIFY>'
-ebs_sns = '<SNS_ARN_TO_NOTIFY>'
-rds_sns = '<SNS_ARN_TO_NOTIFY>'
+ec2_sns = 'arn:aws:sns:us-east-1:659177528321:NotifyMe'
+ebs_sns = 'arn:aws:sns:us-east-1:659177528321:NotifyMe'
+rds_sns = 'arn:aws:sns:us-east-1:659177528321:NotifyMe'
 
 #AWS Account and Region Definition for Reboot Actions
-akid =  '<ACCOUNT_ID>'
-region = '<REGION_NAME>'
+akid = '659177528321'
+region = 'us-east-1'
 
 #Create AWS clients
 ec = boto3.client('ec2')
@@ -134,6 +134,7 @@ def lambda_handler(event, context):
             ActionsEnabled=True,
             AlarmActions=[
                 ec2_sns,
+                "arn:aws:automate:%s:ec2:recover" % region,
             ],
             MetricName='StatusCheckFailed_System',
             Namespace='AWS/EC2',
