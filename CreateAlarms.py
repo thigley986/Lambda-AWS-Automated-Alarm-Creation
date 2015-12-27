@@ -118,6 +118,52 @@ def lambda_handler(event, context):
             ComparisonOperator='LessThanOrEqualToThreshold'
         )
         
+        #Create Metric "Status Check Failed (System) for 5 Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s %s System Check Failed" % (name_tag, instance['InstanceId']),
+            AlarmDescription='Status Check Failed (System) for 5 Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                ec2_sns,
+            ],
+            MetricName='StatusCheckFailed_System',
+            Namespace='AWS/EC2',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'InstanceId',
+                    'Value': instance['InstanceId']
+                },
+            ],
+            Period=60,
+            EvaluationPeriods=5,
+            Threshold=1.0,
+            ComparisonOperator='GreaterThanOrEqualToThreshold'
+        )
+        
+        #Create Metric "Status Check Failed (Instance) for 20 Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s %s Instance Check Failed" % (name_tag, instance['InstanceId']),
+            AlarmDescription='Status Check Failed (Instance) for 20 Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                ec2_sns,
+            ],
+            MetricName='StatusCheckFailed_Instance',
+            Namespace='AWS/EC2',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'InstanceId',
+                    'Value': instance['InstanceId']
+                },
+            ],
+            Period=60,
+            EvaluationPeriods=20,
+            Threshold=1.0,
+            ComparisonOperator='GreaterThanOrEqualToThreshold'
+        )
+        
     for instance in instances:
         for dev in instance['BlockDeviceMappings']:
             if dev.get('Ebs', None) is None:
@@ -125,13 +171,54 @@ def lambda_handler(event, context):
             vol_id = dev['Ebs']['VolumeId']
             print "Found EBS volume %s on instance %s" % (
                 vol_id, instance['InstanceId'])
+            
+        #Create Metric "Volume Idle Time <= 30 sec (of 5 minutes) for 30 Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s %s High Volume Activity Warning" % (vol_id, instance['InstanceId']),
+            AlarmDescription='Volume Idle Time <= 30 sec (of 5 minutes) for 30 Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                ebs_sns,
+            ],
+            MetricName='VolumeIdleTime',
+            Namespace='AWS/EBS',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'VolumeId',
+                    'Value': vol_id
+                },
+            ],
+            Period=300,
+            EvaluationPeriods=6,
+            Threshold=30.0,
+            ComparisonOperator='LessThanOrEqualToThreshold'
+        )
+        
+        #Create Metric "Volume Idle Time <= 30 sec (of 5 minutes) for 60 Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s %s High Volume Activity Critical" % (vol_id, instance['InstanceId']),
+            AlarmDescription='Volume Idle Time <= 30 sec (of 5 minutes) for 60 Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                ebs_sns,
+            ],
+            MetricName='VolumeIdleTime',
+            Namespace='AWS/EBS',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'VolumeId',
+                    'Value': vol_id
+                },
+            ],
+            Period=300,
+            EvaluationPeriods=12,
+            Threshold=30.0,
+            ComparisonOperator='LessThanOrEqualToThreshold'
+        )
         
     database_instances = rd.describe_db_instances().get('DBInstances', [])
     for database in database_instances:
-            print "Found RDS database %s" % (
-                 database['DBInstanceIdentifier'])
-        
-    metricalarms = cw.describe_alarms().get('MetricAlarms', [])
-    for alarm in metricalarms:
-            print "Found CloudWatch alarm %s" % (
-                 alarm['AlarmName'])
+        print "Found RDS database %s" % (
+            database['DBInstanceIdentifier'])
