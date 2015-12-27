@@ -4,15 +4,22 @@ import boto3
 import collections
 
 #SNS Topic Definition for EC2, EBS, and RDS
-ec2_sns = 'SNS-ARN'
-ebs_sns = 'SNS-ARN'
-rds_sns = 'SNS-ARN'
+ec2_sns = '<SNS_ARN_TO_NOTIFY>'
+ebs_sns = '<SNS_ARN_TO_NOTIFY>'
+rds_sns = '<SNS_ARN_TO_NOTIFY>'
 
+#AWS Account and Region Definition for Reboot Actions
+akid =  '<ACCOUNT_ID>
+region = '<REGION_NAME>'
+
+#Create AWS clients
 ec = boto3.client('ec2')
 rd = boto3.client('rds')
 cw = boto3.client('cloudwatch')
 
 def lambda_handler(event, context):
+    
+    #Enumerate EC2 instances
     reservations = ec.describe_instances().get('Reservations', [])
     instances = sum(
         [
@@ -72,51 +79,53 @@ def lambda_handler(event, context):
             ComparisonOperator='GreaterThanOrEqualToThreshold'
         )
         
-        #Create Metric "CPU Credit Balance <= 25 for 30 Minutes"
-        response = cw.put_metric_alarm(
-            AlarmName="%s %s Credit Balance Warning" % (name_tag, instance['InstanceId']),
-            AlarmDescription='CPU Credit Balance <= 25 for 30 Minutes',
-            ActionsEnabled=True,
-            AlarmActions=[
-                ec2_sns,
-            ],
-            MetricName='CPUCreditBalance',
-            Namespace='AWS/EC2',
-            Statistic='Average',
-            Dimensions=[
-                {
-                    'Name': 'InstanceId',
-                    'Value': instance['InstanceId']
-                },
-            ],
-            Period=300,
-            EvaluationPeriods=6,
-            Threshold=25.0,
-            ComparisonOperator='LessThanOrEqualToThreshold'
-        )
-        
-        #Create Metric "CPU Credit Balance <= 5 for 10 Minutes"
-        response = cw.put_metric_alarm(
-            AlarmName="%s %s Credit Balance Critical" % (name_tag, instance['InstanceId']),
-            AlarmDescription='CPU Credit Balance <= 5 for 10 Minutes',
-            ActionsEnabled=True,
-            AlarmActions=[
-                ec2_sns,
-            ],
-            MetricName='CPUCreditBalance',
-            Namespace='AWS/EC2',
-            Statistic='Average',
-            Dimensions=[
-                {
-                    'Name': 'InstanceId',
-                    'Value': instance['InstanceId']
-                },
-            ],
-            Period=300,
-            EvaluationPeriods=2,
-            Threshold=5.0,
-            ComparisonOperator='LessThanOrEqualToThreshold'
-        )
+        #Create CPU Credit Alarms only on T2 instances
+        if "T2" in instance['InstanceType']:
+            #Create Metric "CPU Credit Balance <= 25 for 30 Minutes"
+            response = cw.put_metric_alarm(
+                AlarmName="%s %s Credit Balance Warning" % (name_tag, instance['InstanceId']),
+                AlarmDescription='CPU Credit Balance <= 25 for 30 Minutes',
+                ActionsEnabled=True,
+                AlarmActions=[
+                    ec2_sns,
+                ],
+                MetricName='CPUCreditBalance',
+                Namespace='AWS/EC2',
+                Statistic='Average',
+                Dimensions=[
+                    {
+                        'Name': 'InstanceId',
+                        'Value': instance['InstanceId']
+                    },
+                ],
+                Period=300,
+                EvaluationPeriods=6,
+                Threshold=25.0,
+                ComparisonOperator='LessThanOrEqualToThreshold'
+            )
+            
+            #Create Metric "CPU Credit Balance <= 5 for 10 Minutes"
+            response = cw.put_metric_alarm(
+                AlarmName="%s %s Credit Balance Critical" % (name_tag, instance['InstanceId']),
+                AlarmDescription='CPU Credit Balance <= 5 for 10 Minutes',
+                ActionsEnabled=True,
+                AlarmActions=[
+                    ec2_sns,
+                ],
+                MetricName='CPUCreditBalance',
+                Namespace='AWS/EC2',
+                Statistic='Average',
+                Dimensions=[
+                    {
+                        'Name': 'InstanceId',
+                        'Value': instance['InstanceId']
+                    },
+                ],
+                Period=300,
+                EvaluationPeriods=2,
+                Threshold=5.0,
+                ComparisonOperator='LessThanOrEqualToThreshold'
+            )
         
         #Create Metric "Status Check Failed (System) for 5 Minutes"
         response = cw.put_metric_alarm(
@@ -148,6 +157,7 @@ def lambda_handler(event, context):
             ActionsEnabled=True,
             AlarmActions=[
                 ec2_sns,
+                "arn:aws:swf:%s:%s:action/actions/AWS_EC2.InstanceId.Reboot/1.0" % (region, akid)
             ],
             MetricName='StatusCheckFailed_Instance',
             Namespace='AWS/EC2',
@@ -163,7 +173,8 @@ def lambda_handler(event, context):
             Threshold=1.0,
             ComparisonOperator='GreaterThanOrEqualToThreshold'
         )
-        
+    
+    #Enumerate EBS devices attached to EC2 instances    
     for instance in instances:
         for dev in instance['BlockDeviceMappings']:
             if dev.get('Ebs', None) is None:
@@ -217,8 +228,149 @@ def lambda_handler(event, context):
             Threshold=30.0,
             ComparisonOperator='LessThanOrEqualToThreshold'
         )
-        
+    
+    #Enumerate RDS database instances    
     database_instances = rd.describe_db_instances().get('DBInstances', [])
     for database in database_instances:
         print "Found RDS database %s" % (
             database['DBInstanceIdentifier'])
+        
+        #Create CPU Credit Alarms only on T2 DB Instance Classes
+        if "T2" in database['DBInstanceClass']:
+            
+            #Create Metric "CPU Credit Balance <= 25 for 30 Minutes"
+            response = cw.put_metric_alarm(
+                AlarmName="%s RDS Credit Balance Warning" % (database['DBInstanceIdentifier']),
+                AlarmDescription='CPU Credit Balance <= 25 for 30 Minutes',
+                ActionsEnabled=True,
+                AlarmActions=[
+                    rds_sns,
+                ],
+                MetricName='CPUCreditBalance',
+                Namespace='AWS/RDS',
+                Statistic='Average',
+                Dimensions=[
+                    {
+                        'Name': 'DBInstanceIdentifier',
+                        'Value': database['DBInstanceIdentifier']
+                    },
+                ],
+                Period=300,
+                EvaluationPeriods=6,
+                Threshold=25.0,
+                ComparisonOperator='LessThanOrEqualToThreshold'
+            )
+            
+            #Create Metric "CPU Credit Balance <= 10 for 10 Minutes"
+            response = cw.put_metric_alarm(
+                AlarmName="%s RDS Credit Balance Critical" % (database['DBInstanceIdentifier']),
+                AlarmDescription='CPU Credit Balance <= 10 for 10 Minutes',
+                ActionsEnabled=True,
+                AlarmActions=[
+                    rds_sns,
+                ],
+                MetricName='CPUCreditBalance',
+                Namespace='AWS/RDS',
+                Statistic='Average',
+                Dimensions=[
+                    {
+                        'Name': 'DBInstanceIdentifier',
+                        'Value': database['DBInstanceIdentifier']
+                    },
+                ],
+                Period=300,
+                EvaluationPeriods=2,
+                Threshold=10.0,
+                ComparisonOperator='LessThanOrEqualToThreshold'
+            )
+        
+        #Create Metric "Read Latency >= 3ms for 15 Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s RDS Read Latency Warning" % (database['DBInstanceIdentifier']),
+            AlarmDescription='Read Latency >= 3ms for 15 Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                rds_sns,
+            ],
+            MetricName='ReadLatency',
+            Namespace='AWS/RDS',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'DBInstanceIdentifier',
+                    'Value': database['DBInstanceIdentifier']
+                },
+            ],
+            Period=300,
+            EvaluationPeriods=3,
+            Threshold=.003,
+            ComparisonOperator='GreaterThanOrEqualToThreshold'
+        )
+        
+        #Create Metric "Read Latency >= 5ms for 15 Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s RDS Read Latency Critical" % (database['DBInstanceIdentifier']),
+            AlarmDescription='Read Latency >= 5ms for 15 Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                rds_sns,
+            ],
+            MetricName='ReadLatency',
+            Namespace='AWS/RDS',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'DBInstanceIdentifier',
+                    'Value': database['DBInstanceIdentifier']
+                },
+            ],
+            Period=300,
+            EvaluationPeriods=3,
+            Threshold=.005,
+            ComparisonOperator='GreaterThanOrEqualToThreshold'
+        )        
+        #Create Metric "Write Latency >= 3ms for 15 Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s RDS Write Latency Warning" % (database['DBInstanceIdentifier']),
+            AlarmDescription='Write Latency >= 3ms for 15 Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                rds_sns,
+            ],
+            MetricName='WriteLatency',
+            Namespace='AWS/RDS',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'DBInstanceIdentifier',
+                    'Value': database['DBInstanceIdentifier']
+                },
+            ],
+            Period=300,
+            EvaluationPeriods=3,
+            Threshold=.003,
+            ComparisonOperator='GreaterThanOrEqualToThreshold'
+        )
+        
+        #Create Metric "Write Latency >= 5ms for 15 Minutes"
+        response = cw.put_metric_alarm(
+            AlarmName="%s RDS Write Latency Critical" % (database['DBInstanceIdentifier']),
+            AlarmDescription='Write Latency >= 5ms for 15 Minutes',
+            ActionsEnabled=True,
+            AlarmActions=[
+                rds_sns,
+            ],
+            MetricName='WriteLatency',
+            Namespace='AWS/RDS',
+            Statistic='Average',
+            Dimensions=[
+                {
+                    'Name': 'DBInstanceIdentifier',
+                    'Value': database['DBInstanceIdentifier']
+                },
+            ],
+            Period=300,
+            EvaluationPeriods=3,
+            Threshold=.005,
+            ComparisonOperator='GreaterThanOrEqualToThreshold'
+        )
