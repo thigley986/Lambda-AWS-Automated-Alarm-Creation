@@ -9,7 +9,7 @@ ebs_sns = '<SNS_ARN_TO_NOTIFY>'
 rds_sns = '<SNS_ARN_TO_NOTIFY>'
 
 #AWS Account and Region Definition for Reboot Actions
-akid =  '<ACCOUNT_ID>
+akid =  '<ACCOUNT_ID>'
 region = '<REGION_NAME>'
 
 #Create AWS clients
