@@ -330,10 +330,10 @@ def lambda_handler(event, context):
             Threshold=.005,
             ComparisonOperator='GreaterThanOrEqualToThreshold'
         )        
-        #Create Metric "Write Latency >= 3ms for 15 Minutes"
+        #Create Metric "Write Latency >= 8ms for 15 Minutes"
         response = cw.put_metric_alarm(
             AlarmName="%s RDS Write Latency Warning" % (database['DBInstanceIdentifier']),
-            AlarmDescription='Write Latency >= 3ms for 15 Minutes',
+            AlarmDescription='Write Latency >= 8ms for 15 Minutes',
             ActionsEnabled=True,
             AlarmActions=[
                 rds_sns,
@@ -349,14 +349,14 @@ def lambda_handler(event, context):
             ],
             Period=300,
             EvaluationPeriods=3,
-            Threshold=.003,
+            Threshold=.008,
             ComparisonOperator='GreaterThanOrEqualToThreshold'
         )
         
-        #Create Metric "Write Latency >= 5ms for 15 Minutes"
+        #Create Metric "Write Latency >= 12ms for 15 Minutes"
         response = cw.put_metric_alarm(
             AlarmName="%s RDS Write Latency Critical" % (database['DBInstanceIdentifier']),
-            AlarmDescription='Write Latency >= 5ms for 15 Minutes',
+            AlarmDescription='Write Latency >= 12ms for 15 Minutes',
             ActionsEnabled=True,
             AlarmActions=[
                 rds_sns,
@@ -372,6 +372,6 @@ def lambda_handler(event, context):
             ],
             Period=300,
             EvaluationPeriods=3,
-            Threshold=.005,
+            Threshold=.012,
             ComparisonOperator='GreaterThanOrEqualToThreshold'
         )
