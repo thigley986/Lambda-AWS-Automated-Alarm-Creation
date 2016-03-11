@@ -3,6 +3,9 @@
 import boto3
 import collections
 
+#Create Session with IAM User
+session = boto3.session.Session(aws_access_key_id='ACCESS_KEY', aws_secret_access_key='ACCESS_KEY_SECRET')
+
 #SNS Topic Definition for EC2, EBS, and RDS
 ec2_sns = '<SNS_TOPIC_ARN>'
 ebs_sns = '<SNS_TOPIC_ARN>'
@@ -13,9 +16,9 @@ akid = '<ACCOUNT_ID>'
 region = '<REGION_NAME>'
 
 #Create AWS clients
-ec = boto3.client('ec2')
-rd = boto3.client('rds')
-cw = boto3.client('cloudwatch')
+ec = session.client('ec2')
+rd = session.client('rds')
+cw = session.client('cloudwatch')
 
 def lambda_handler(event, context):
     
