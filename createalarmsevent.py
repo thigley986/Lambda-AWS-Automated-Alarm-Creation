@@ -3,22 +3,23 @@ import boto3
 import logging
 
 # SNS Topic Definition for EC2, EBS
-ec2_sns = 'arn:aws:sns:eu-west-1:503375299761:testinspector'
-ebs_sns = 'arn:aws:sns:eu-west-1:503375299761:testinspector'
+ec2_sns = '<SNS_TOPIC_ARN>'
+ebs_sns = '<SNS_TOPIC_ARN>'
 
 # AWS Account and Region Definition for Reboot Actions
-akid = '503375299761'
-region = 'eu-west-1'
+akid = '<ACCOUNT_ID>'
+region = '<REGION_NAME>'
+name_tag = '<TAG_NAME>'
 
 # Create AWS clients
-ec = boto3.client('ec2')
+ec2session = boto3.client('ec2')
 cw = boto3.client('cloudwatch')
 
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
 
+# Retrives instance id from cloudwatch event
 def get_instance_id(event):
-    """Parses InstanceID from the event dict and gets the FQDN from EC2 API"""
     try:
         return event['detail']['instance-id']
     except KeyError as err:
@@ -26,24 +27,25 @@ def get_instance_id(event):
         return False
 
 def lambda_handler(event, context):
+
+    session = boto3.session.Session()
+    ec2session = session.client('ec2')
     instanceid = get_instance_id(event)
-    name_tag = 'lambdagenerated'
 
     # Create Metric "CPU Utilization Greater than 95% for 15+ Minutes"
-
     cw.put_metric_alarm(
     AlarmName="%s %s High CPU Utilization Warning" % (name_tag, instanceid),
     AlarmDescription='CPU Utilization Greater than 95% for 15+ Minutes',
     ActionsEnabled=True,
     AlarmActions=[
-        ec2_sns,
+        ec2_sns
     ],
     MetricName='CPUUtilization',
     Namespace='AWS/EC2',
     Statistic='Average',
     Dimensions=[
         {
-            'Name': instanceid,
+            'Name': 'InstanceId',
             'Value': instanceid
         },
     ],
@@ -59,14 +61,14 @@ def lambda_handler(event, context):
     AlarmDescription='CPU Utilization Greater than 95% for 60+ Minutes',
     ActionsEnabled=True,
     AlarmActions=[
-        ec2_sns,
+        ec2_sns
     ],
     MetricName='CPUUtilization',
     Namespace='AWS/EC2',
     Statistic='Average',
     Dimensions=[
         {
-            'Name': instanceid,
+            'Name': 'InstanceId',
             'Value': instanceid
         },
     ],
@@ -83,14 +85,14 @@ def lambda_handler(event, context):
     ActionsEnabled=True,
     AlarmActions=[
         ec2_sns,
-        "arn:aws:automate:%s:ec2:recover" % region,
+        "arn:aws:automate:%s:ec2:recover" % region
     ],
     MetricName='StatusCheckFailed_System',
     Namespace='AWS/EC2',
     Statistic='Average',
     Dimensions=[
         {
-            'Name': instanceid,
+            'Name': 'InstanceId',
             'Value': instanceid
         },
     ],
@@ -106,15 +108,14 @@ def lambda_handler(event, context):
     AlarmDescription='Status Check Failed (Instance) for 20 Minutes',
     ActionsEnabled=True,
     AlarmActions=[
-        ec2_sns,
-        "arn:aws:swf:%s:%s:action/actions/AWS_EC2.instance['instanceid'].Reboot/1.0" % (region, akid)
+        ec2_sns
     ],
     MetricName='StatusCheckFailed_Instance',
     Namespace='AWS/EC2',
     Statistic='Average',
     Dimensions=[
         {
-            'Name': instanceid,
+            'Name': 'InstanceId',
             'Value': instanceid
         },
     ],
@@ -124,3 +125,61 @@ def lambda_handler(event, context):
     ComparisonOperator='GreaterThanOrEqualToThreshold'
 )
 
+    # Enumerate EBS devices attached to EC2 instances
+    #vol_id = ec2session.describe_volumes()
+    #vol_id = ec2session.get_all_volumes(filters={'attachment.instance-id': instanceid})
+
+    ec2d = boto3.resource('ec2', region_name= region)
+    instance = ec2d.Instance(instanceid)
+    vol_id = instance.volumes.all()
+
+    for v in vol_id:
+
+        print("Found EBS volume %s on instance %s" % (v.id, instanceid))
+
+    # Create Metric "Volume Idle Time <= 30 sec (of 5 minutes) for 30 Minutes"
+
+    cw.put_metric_alarm(
+    AlarmName="%s %s High Volume Activity Warning" % (v.id, instanceid),
+    AlarmDescription='Volume Idle Time <= 30 sec (of 5 minutes) for 30 Minutes',
+    ActionsEnabled=True,
+    AlarmActions=[
+        ebs_sns
+    ],
+    MetricName='VolumeIdleTime',
+    Namespace='AWS/EBS',
+    Statistic='Average',
+    Dimensions=[
+        {
+            'Name': 'VolumeId',
+            'Value': v.id
+        },
+    ],
+    Period=300,
+    EvaluationPeriods=6,
+    Threshold=30.0,
+    ComparisonOperator='LessThanOrEqualToThreshold'
+)
+
+# Create Metric "Volume Idle Time <= 30 sec (of 5 minutes) for 60 Minutes"
+    cw.put_metric_alarm(
+    AlarmName="%s %s High Volume Activity Critical" % (v.id, instanceid),
+    AlarmDescription='Volume Idle Time <= 30 sec (of 5 minutes) for 60 Minutes',
+    ActionsEnabled=True,
+    AlarmActions=[
+        ebs_sns
+    ],
+    MetricName='VolumeIdleTime',
+    Namespace='AWS/EBS',
+    Statistic='Average',
+    Dimensions=[
+        {
+            'Name': 'VolumeId',
+            'Value': v.id
+        },
+    ],
+    Period=300,
+    EvaluationPeriods=12,
+    Threshold=30.0,
+    ComparisonOperator='LessThanOrEqualToThreshold'
+)
