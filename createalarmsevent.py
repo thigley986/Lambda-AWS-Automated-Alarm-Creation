@@ -1,4 +1,3 @@
-from __future__ import print_function
 import boto3
 import logging
 
@@ -6,9 +5,6 @@ import logging
 ec2_sns = '<SNS_TOPIC_ARN>'
 ebs_sns = '<SNS_TOPIC_ARN>'
 
-# AWS Account and Region Definition for Reboot Actions
-akid = '<ACCOUNT_ID>'
-region = '<REGION_NAME>'
 name_tag = '<TAG_NAME>'
 
 # Create AWS clients
@@ -21,7 +17,15 @@ LOGGER.setLevel(logging.INFO)
 # Retrives instance id from cloudwatch event
 def get_instance_id(event):
     try:
-        return event['detail']['instance-id']
+        return event['detail']['EC2InstanceId']
+    except KeyError as err:
+        LOGGER.error(err)
+        return False
+
+# Retrives region from cloudwatch event
+def get_region(event):
+    try:
+        return event['region']
     except KeyError as err:
         LOGGER.error(err)
         return False
@@ -31,6 +35,7 @@ def lambda_handler(event, context):
     session = boto3.session.Session()
     ec2session = session.client('ec2')
     instanceid = get_instance_id(event)
+    region = get_region(event)
 
     # Create Metric "CPU Utilization Greater than 95% for 15+ Minutes"
     cw.put_metric_alarm(
@@ -129,57 +134,78 @@ def lambda_handler(event, context):
     #vol_id = ec2session.describe_volumes()
     #vol_id = ec2session.get_all_volumes(filters={'attachment.instance-id': instanceid})
 
+    region = get_region(event)
     ec2d = boto3.resource('ec2', region_name= region)
     instance = ec2d.Instance(instanceid)
     vol_id = instance.volumes.all()
 
     for v in vol_id:
+        LOGGER.info("Found EBS volume %s on instance %s" % (v.id, instanceid))
+        # Create Metric "Volume Idle Time <= 30 sec (of 5 minutes) for 30 Minutes"
+        cw.put_metric_alarm(
+        AlarmName="%s %s High Volume Activity Warning" % (v.id, instanceid),
+        AlarmDescription='Volume Idle Time <= 30 sec (of 5 minutes) for 30 Minutes',
+        ActionsEnabled=True,
+        AlarmActions=[
+            ec2_sns
+        ],
+        MetricName='VolumeIdleTime',
+        Namespace='AWS/EBS',
+        Statistic='Average',
+        Dimensions=[
+            {
+                'Name': 'VolumeId',
+                'Value': v.id
+            },
+        ],
+        Period=300,
+        EvaluationPeriods=6,
+        Threshold=30.0,
+        ComparisonOperator='LessThanOrEqualToThreshold'
+        )
 
-        print("Found EBS volume %s on instance %s" % (v.id, instanceid))
+        # Create Metric "Volume Idle Time <= 30 sec (of 5 minutes) for 60 Minutes"
+        cw.put_metric_alarm(
+        AlarmName="%s %s High Volume Activity Critical" % (v.id, instanceid),
+        AlarmDescription='Volume Idle Time <= 30 sec (of 5 minutes) for 60 Minutes',
+        ActionsEnabled=True,
+        AlarmActions=[
+            ec2_sns
+        ],
+        MetricName='VolumeIdleTime',
+        Namespace='AWS/EBS',
+        Statistic='Average',
+        Dimensions=[
+            {
+                'Name': 'VolumeId',
+                'Value': v.id
+            },
+        ],
+        Period=300,
+        EvaluationPeriods=12,
+        Threshold=30.0,
+        ComparisonOperator='LessThanOrEqualToThreshold'
+        )
 
-    # Create Metric "Volume Idle Time <= 30 sec (of 5 minutes) for 30 Minutes"
-
-    cw.put_metric_alarm(
-    AlarmName="%s %s High Volume Activity Warning" % (v.id, instanceid),
-    AlarmDescription='Volume Idle Time <= 30 sec (of 5 minutes) for 30 Minutes',
-    ActionsEnabled=True,
-    AlarmActions=[
-        ebs_sns
-    ],
-    MetricName='VolumeIdleTime',
-    Namespace='AWS/EBS',
-    Statistic='Average',
-    Dimensions=[
-        {
-            'Name': 'VolumeId',
-            'Value': v.id
-        },
-    ],
-    Period=300,
-    EvaluationPeriods=6,
-    Threshold=30.0,
-    ComparisonOperator='LessThanOrEqualToThreshold'
-)
-
-# Create Metric "Volume Idle Time <= 30 sec (of 5 minutes) for 60 Minutes"
-    cw.put_metric_alarm(
-    AlarmName="%s %s High Volume Activity Critical" % (v.id, instanceid),
-    AlarmDescription='Volume Idle Time <= 30 sec (of 5 minutes) for 60 Minutes',
-    ActionsEnabled=True,
-    AlarmActions=[
-        ebs_sns
-    ],
-    MetricName='VolumeIdleTime',
-    Namespace='AWS/EBS',
-    Statistic='Average',
-    Dimensions=[
-        {
-            'Name': 'VolumeId',
-            'Value': v.id
-        },
-    ],
-    Period=300,
-    EvaluationPeriods=12,
-    Threshold=30.0,
-    ComparisonOperator='LessThanOrEqualToThreshold'
-)
+        # Create Metric "BurstBalance <= 10 for 25 minutes"
+        cw.put_metric_alarm(
+        AlarmName="%s %s Burst Balance Critical" % (v.id, instanceid),
+        AlarmDescription='BurstBalance <= 10 for 25 minutes',
+        ActionsEnabled=True,
+        AlarmActions=[
+            ec2_sns
+        ],
+        MetricName='BurstBalance',
+        Namespace='AWS/EBS',
+        Statistic='Average',
+        Dimensions=[
+            {
+                'Name': 'VolumeId',
+                'Value': v.id
+            },
+        ],
+        Period=300,
+        EvaluationPeriods=5,
+        Threshold=10.0,
+        ComparisonOperator='LessThanOrEqualToThreshold'
+        )
